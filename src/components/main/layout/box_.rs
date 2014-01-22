@@ -12,7 +12,7 @@ use gfx::display_list::{BaseDisplayItem, BorderDisplayItem, BorderDisplayItemCla
 use gfx::display_list::{DisplayList, ImageDisplayItem, ImageDisplayItemClass};
 use gfx::display_list::{SolidColorDisplayItem, SolidColorDisplayItemClass, TextDisplayItem};
 use gfx::display_list::{TextDisplayItemClass, TextDisplayItemFlags, ClipDisplayItem};
-use gfx::display_list::{ClipDisplayItemClass};
+use gfx::display_list::{ClipDisplayItemClass, DisplayLists};
 use gfx::font::FontStyle;
 
 use gfx::text::text_run::TextRun;
@@ -639,7 +639,8 @@ impl Box {
     /// necessary.
     pub fn paint_background_if_applicable<E:ExtraDisplayListData>(
                                           &self,
-                                          list: &RefCell<DisplayList<E>>,
+                                          index: uint,
+                                          lists: &RefCell<DisplayLists<E>>,
                                           absolute_bounds: &Rect<Au>,
                                           offset: &Point2D<Au>) {
         // FIXME: This causes a lot of background colors to be displayed when they are clearly not
@@ -658,7 +659,7 @@ impl Box {
                         info.style.get().Background.background_color);
 
                     if !background_color.alpha.approx_eq(&0.0) {
-                        list.with_mut(|list| {
+                        lists.with_mut(|lists| {
                             let solid_color_display_item = ~SolidColorDisplayItem {
                                 base: BaseDisplayItem {
                                           bounds: bg_rect.clone(),
@@ -667,7 +668,7 @@ impl Box {
                                       color: background_color.to_gfx_color(),
                             };
 
-                            list.append_item(SolidColorDisplayItemClass(solid_color_display_item))
+                            lists.lists[index].append_item(SolidColorDisplayItemClass(solid_color_display_item))
                         });
                     }
 
@@ -678,7 +679,7 @@ impl Box {
         let style = self.style();
         let background_color = style.resolve_color(style.Background.background_color);
         if !background_color.alpha.approx_eq(&0.0) {
-            list.with_mut(|list| {
+            lists.with_mut(|lists| {
                 let solid_color_display_item = ~SolidColorDisplayItem {
                     base: BaseDisplayItem {
                         bounds: *absolute_bounds,
@@ -687,8 +688,8 @@ impl Box {
                     color: background_color.to_gfx_color(),
                 };
 
-                list.append_item(SolidColorDisplayItemClass(solid_color_display_item))
-            })
+                lists.lists[index].append_item(SolidColorDisplayItemClass(solid_color_display_item))
+            });
         }
     }
 
@@ -696,7 +697,8 @@ impl Box {
     /// necessary.
     pub fn paint_borders_if_applicable<E:ExtraDisplayListData>(
                                        &self,
-                                       list: &RefCell<DisplayList<E>>,
+                                       index: uint,
+                                       lists: &RefCell<DisplayLists<E>>,
                                        abs_bounds: &Rect<Au>) {
         // Fast path.
         let border = self.border.get();
@@ -715,7 +717,7 @@ impl Box {
         let left_style = style.Border.border_left_style;
 
         // Append the border to the display list.
-        list.with_mut(|list| {
+        lists.with_mut(|lists| {
             let border_display_item = ~BorderDisplayItem {
                 base: BaseDisplayItem {
                     bounds: *abs_bounds,
@@ -732,7 +734,7 @@ impl Box {
                                           left_style)
             };
 
-            list.append_item(BorderDisplayItemClass(border_display_item))
+            lists.lists[index].append_item(BorderDisplayItemClass(border_display_item))
         });
     }
 
@@ -756,7 +758,8 @@ impl Box {
                               dirty: &Rect<Au>,
                               offset: Point2D<Au>,
                               flow: &Flow,
-                              list: &RefCell<DisplayList<E>>) {
+                              index: uint,
+                              lists: &RefCell<DisplayLists<E>>) {
         let box_bounds = self.position.get();
         let absolute_box_bounds = box_bounds.translate(&offset);
         debug!("Box::build_display_list at rel={}, abs={}: {:s}",
@@ -775,12 +778,12 @@ impl Box {
         }
 
         // Add the background to the list, if applicable.
-        self.paint_background_if_applicable(list, &absolute_box_bounds, &offset);
+        self.paint_background_if_applicable(index, lists, &absolute_box_bounds, &offset);
 
         match self.specific {
             UnscannedTextBox(_) => fail!("Shouldn't see unscanned boxes here."),
             ScannedTextBox(ref text_box) => {
-                list.with_mut(|list| {
+                lists.with_mut(|lists| {
                     let item = ~ClipDisplayItem {
                         base: BaseDisplayItem {
                             bounds: absolute_box_bounds,
@@ -789,7 +792,7 @@ impl Box {
                         child_list: ~[],
                         need_clip: false
                     };
-                    list.append_item(ClipDisplayItemClass(item));
+                    lists.lists[index].append_item(ClipDisplayItemClass(item));
                 });
 
                 let text_color = self.style().Color.color.to_gfx_color();
@@ -814,7 +817,7 @@ impl Box {
                 text_flags.set_override_line_through(flow_flags.flags.override_line_through());
 
                 // Create the text box.
-                list.with_mut(|list| {
+                lists.with_mut(|lists| {
                     let text_display_item = ~TextDisplayItem {
                         base: BaseDisplayItem {
                             bounds: absolute_box_bounds,
@@ -829,7 +832,7 @@ impl Box {
                         flags: text_flags,
                     };
 
-                    list.append_item(TextDisplayItemClass(text_display_item))
+                    lists.lists[index].append_item(TextDisplayItemClass(text_display_item));
                 });
 
                 // Draw debug frames for text bounds.
@@ -840,7 +843,7 @@ impl Box {
                     // Compute the text box bounds and draw a border surrounding them.
                     let debug_border = SideOffsets2D::new_all_same(Au::from_px(1));
 
-                    list.with_mut(|list| {
+                    lists.with_mut(|lists| {
                         let border_display_item = ~BorderDisplayItem {
                             base: BaseDisplayItem {
                                 bounds: absolute_box_bounds,
@@ -851,7 +854,7 @@ impl Box {
                             style: SideOffsets2D::new_all_same(border_style::solid)
 
                         };
-                        list.append_item(BorderDisplayItemClass(border_display_item))
+                        lists.lists[index].append_item(BorderDisplayItemClass(border_display_item));
                     });
 
                     // Draw a rectangle representing the baselines.
@@ -862,7 +865,7 @@ impl Box {
                     let baseline = Rect(absolute_box_bounds.origin + Point2D(Au(0), ascent),
                                         Size2D(absolute_box_bounds.size.width, Au(0)));
 
-                    list.with_mut(|list| {
+                    lists.with_mut(|lists| {
                         let border_display_item = ~BorderDisplayItem {
                             base: BaseDisplayItem {
                                 bounds: baseline,
@@ -873,12 +876,12 @@ impl Box {
                             style: SideOffsets2D::new_all_same(border_style::dashed)
 
                         };
-                        list.append_item(BorderDisplayItemClass(border_display_item))
+                        lists.lists[index].append_item(BorderDisplayItemClass(border_display_item));
                     });
                 });
             },
             GenericBox | IframeBox(..) => {
-                list.with_mut(|list| {
+                lists.with_mut(|lists| {
                     let item = ~ClipDisplayItem {
                         base: BaseDisplayItem {
                             bounds: absolute_box_bounds,
@@ -887,7 +890,7 @@ impl Box {
                         child_list: ~[],
                         need_clip: self.needs_clip()
                     };
-                    list.append_item(ClipDisplayItemClass(item));
+                    lists.lists[index].append_item(ClipDisplayItemClass(item));
                 });
 
                 // FIXME(pcwalton): This is a bit of an abuse of the logging infrastructure. We
@@ -895,7 +898,7 @@ impl Box {
                 debug!("{:?}", {
                     let debug_border = SideOffsets2D::new_all_same(Au::from_px(1));
 
-                    list.with_mut(|list| {
+                    lists.with_mut(|lists| {
                         let border_display_item = ~BorderDisplayItem {
                             base: BaseDisplayItem {
                                 bounds: absolute_box_bounds,
@@ -906,12 +909,12 @@ impl Box {
                             style: SideOffsets2D::new_all_same(border_style::solid)
 
                         };
-                        list.append_item(BorderDisplayItemClass(border_display_item))
+                        lists.lists[index].append_item(BorderDisplayItemClass(border_display_item));
                     });
                 });
             },
             ImageBox(ref image_box) => {
-                list.with_mut(|list| {
+                lists.with_mut(|lists| {
                     let item = ~ClipDisplayItem {
                         base: BaseDisplayItem {
                             bounds: absolute_box_bounds,
@@ -920,7 +923,7 @@ impl Box {
                         child_list: ~[],
                         need_clip: false
                     };
-                    list.append_item(ClipDisplayItemClass(item));
+                    lists.lists[index].append_item(ClipDisplayItemClass(item));
                 });
 
                 let mut image_ref = image_box.image.borrow_mut();
@@ -929,15 +932,15 @@ impl Box {
                         debug!("(building display list) building image box");
 
                         // Place the image into the display list.
-                        list.with_mut(|list| {
+                        lists.with_mut(|lists| {
                             let image_display_item = ~ImageDisplayItem {
                                 base: BaseDisplayItem {
-                                    bounds: absolute_box_bounds,
-                                    extra: ExtraDisplayListData::new(self),
-                                },
-                                image: image.clone(),
+                                          bounds: absolute_box_bounds,
+                                          extra: ExtraDisplayListData::new(self),
+                                      },
+                                      image: image.clone(),
                             };
-                            list.append_item(ImageDisplayItemClass(image_display_item));
+                            lists.lists[index].append_item(ImageDisplayItemClass(image_display_item));
                         });
                     }
                     None => {
@@ -970,7 +973,8 @@ impl Box {
         // Add a border, if applicable.
         //
         // TODO: Outlines.
-        self.paint_borders_if_applicable(list, &absolute_box_bounds);
+        self.paint_borders_if_applicable(index, lists, &absolute_box_bounds);
+
     }
 
     /// Returns the *minimum width* and *preferred width* of this box as defined by CSS 2.1.

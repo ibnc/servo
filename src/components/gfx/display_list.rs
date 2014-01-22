@@ -27,9 +27,52 @@ use std::cast::transmute_region;
 use std::vec::VecIterator;
 use style::computed_values::border_style;
 
+pub struct DisplayLists<E> {
+    lists: ~[DisplayList<E>]
+}
+
+impl<E> DisplayLists<E> {
+    pub fn new() -> DisplayLists<E> {
+        DisplayLists {
+            lists: ~[]
+        }
+    }
+
+    pub fn iter<'a>(&'a self) -> DisplayListIterator<'a,E> {
+        ParentDisplayListIterator(self.lists.iter())
+    }
+
+    pub fn append_list(&mut self, list: DisplayList<E>) {
+        self.lists.push(list);
+    }
+
+    pub fn list_at(self, index: uint) -> DisplayList<E> {
+        self.lists[index]
+    }
+
+    pub fn replace_at(&mut self, index: uint, value: DisplayList<E>) {
+        self.lists[index] = value;
+    }
+}
+
 /// A list of rendering operations to be performed.
 pub struct DisplayList<E> {
     list: ~[DisplayItem<E>]
+}
+
+pub enum DisplayListIterator<'a,E> {
+    EmptyDisplayListIterator,
+    ParentDisplayListIterator(VecIterator<'a,DisplayList<E>>),
+}
+
+impl<'a,E> Iterator<&'a DisplayList<E>> for DisplayListIterator<'a,E> {
+    #[inline]
+    fn next(&mut self) -> Option<&'a DisplayList<E>> {
+        match *self {
+            EmptyDisplayListIterator => None,
+            ParentDisplayListIterator(ref mut subiterator) => subiterator.next(),
+        }
+    }
 }
 
 impl<E> DisplayList<E> {

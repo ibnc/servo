@@ -25,7 +25,7 @@ use layout::wrapper::LayoutNode;
 use extra::arc::{Arc, MutexArc, RWArc};
 use geom::rect::Rect;
 use geom::size::Size2D;
-use gfx::display_list::{ClipDisplayItemClass, DisplayItem, DisplayItemIterator, DisplayList};
+use gfx::display_list::{ClipDisplayItemClass, DisplayItem, DisplayItemIterator, DisplayList, DisplayLists};
 use gfx::font_context::FontContextInfo;
 use gfx::opts::Opts;
 use gfx::render_task::{RenderMsg, RenderChan, RenderLayer};
@@ -89,7 +89,7 @@ pub struct LayoutTask {
     screen_size: Size2D<Au>,
 
     /// A cached display list.
-    display_list: Option<Arc<DisplayList<OpaqueNode>>>,
+    display_lists: Option<Arc<DisplayLists<OpaqueNode>>>,
 
     stylist: RWArc<Stylist>,
 
@@ -273,7 +273,7 @@ impl LayoutTask {
             screen_size: screen_size,
             leaf_set: MutexArc::new(LeafSet::new()),
 
-            display_list: None,
+            display_lists: None,
             stylist: RWArc::new(new_stylist()),
             parallel_traversal: parallel_traversal,
             profiler_chan: profiler_chan,
@@ -557,14 +557,16 @@ impl LayoutTask {
         if data.goal == ReflowForDisplay {
             profile(time::LayoutDispListBuildCategory, self.profiler_chan.clone(), || {
                 let root_size = flow::base(layout_root).position.size;
-                let display_list = ~RefCell::new(DisplayList::<OpaqueNode>::new());
+                let mut display_lists = DisplayLists::new();
+                display_lists.append_list(DisplayList::<OpaqueNode>::new());
+                let display_lists = ~RefCell::new(display_lists);
                 let dirty = flow::base(layout_root).position.clone();
                 let display_list_builder = DisplayListBuilder {
                     ctx: &layout_ctx,
                 };
-                layout_root.build_display_list(&display_list_builder, &dirty, display_list);
+                layout_root.build_display_lists(&display_list_builder, &dirty, display_lists);
 
-                let display_list = Arc::new(display_list.unwrap());
+                let display_lists = Arc::new(display_lists.unwrap());
 
                 let mut color = color::rgba(255.0, 255.0, 255.0, 255.0);
 
@@ -589,13 +591,13 @@ impl LayoutTask {
                 }
 
                 let render_layer = RenderLayer {
-                    display_list: display_list.clone(),
+                    display_lists: display_lists.clone(),
                     size: Size2D(root_size.width.to_nearest_px() as uint,
                                  root_size.height.to_nearest_px() as uint),
                     color: color
                 };
 
-                self.display_list = Some(display_list.clone());
+                self.display_lists = Some(display_lists.clone());
 
                 debug!("Layout done!");
 
@@ -638,8 +640,9 @@ impl LayoutTask {
                 }
 
                 let mut rect = None;
-                let display_list = self.display_list.as_ref().unwrap().get();
-                union_boxes_for_node(&mut rect, display_list.iter(), node);
+                for display_list in self.display_lists.as_ref().unwrap().get().iter() {
+                    union_boxes_for_node(&mut rect, display_list.iter(), node);
+                }
                 reply_chan.send(ContentBoxResponse(rect.unwrap_or(Au::zero_rect())))
             }
             ContentBoxesQuery(node, reply_chan) => {
@@ -658,8 +661,9 @@ impl LayoutTask {
                 }
 
                 let mut boxes = ~[];
-                let display_list = self.display_list.as_ref().unwrap().get();
-                add_boxes_for_node(&mut boxes, display_list.iter(), node);
+                for display_list in self.display_lists.as_ref().unwrap().get().iter() {
+                    add_boxes_for_node(&mut boxes, display_list.iter(), node);
+                }
                 reply_chan.send(ContentBoxesResponse(boxes))
             }
             HitTestQuery(_, point, reply_chan) => {
@@ -699,27 +703,30 @@ impl LayoutTask {
                     let ret: Option<HitTestResponse> = None;
                     ret
                 }
-                let response = {
-                    match self.display_list {
-                        Some(ref list) => {
-                            let display_list = list.get();
-                            let (x, y) = (Au::from_frac_px(point.x as f64),
-                                          Au::from_frac_px(point.y as f64));
-                            let resp = hit_test(x,y,display_list.list);
-                            if resp.is_none() {
-                                Err(())
-                            } else {
-                                Ok(resp.unwrap())
+                for display_list in self.display_lists.as_ref().unwrap().get().iter() {
+                    let response = {
+                    //really ?
+                        match Some(display_list) {
+                            Some(ref list) => {
+                                let display_list = list;
+                                let (x, y) = (Au::from_frac_px(point.x as f64),
+                                              Au::from_frac_px(point.y as f64));
+                                let resp = hit_test(x,y,display_list.list);
+                                if resp.is_none() {
+                                    Err(())
+                                } else {
+                                    Ok(resp.unwrap())
+                                }
                             }
+                            None => {
+                                error!("Can't hit test: no display list");
+                                Err(())
+                            },
                         }
-                        None => {
-                            error!("Can't hit test: no display list");
-                            Err(())
-                        },
-                    }
-                };
+                    };
+                    reply_chan.send(response)
+                }
 
-                reply_chan.send(response)
             }
         }
     }
