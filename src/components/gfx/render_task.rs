@@ -308,8 +308,8 @@ impl<C: RenderListener + Send,T:Send+Freeze> RenderTask<C,T> {
                         profile(time::RenderingDrawingCategory, self.profiler_chan.clone(), || {
                             //dear god there has to be a better way of doing this
                             //let mut display_lists = render_layer.display_lists.get().iter().map(|x| x.iter().map(|y| y));
-                            //display_lists.next().unwrap().next().unwrap().draw_into_context(&mut ctx);
-                            //ctx.draw_target.flush();
+                            render_layer.display_lists.get().draw_lists_into_context(&mut ctx);
+                            ctx.draw_target.flush();
                         });
                     }
 

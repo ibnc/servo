@@ -512,14 +512,6 @@ impl BlockFlow {
 
         debug!("build_display_list_block: adding display element");
 
-        if self.is_fixed {
-            lists.with_mut(|lists| {
-                lists.append_list(DisplayList::<E>::new());
-            });
-
-            index = index + 1;
-        } 
-
         // add box that starts block context
         for box_ in self.box_.iter() {
             box_.build_display_list(builder, dirty, self.base.abs_position, (&*self) as &Flow, index, lists);

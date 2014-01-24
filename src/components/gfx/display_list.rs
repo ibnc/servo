@@ -53,6 +53,22 @@ impl<E> DisplayLists<E> {
     pub fn replace_at(&mut self, index: uint, value: DisplayList<E>) {
         self.lists[index] = value;
     }
+
+    pub fn draw_lists_into_context(&self, render_context: &mut RenderContext) {
+        for list in self.lists.iter() {
+            list.draw_into_context(render_context);
+        }
+        debug!("{:?}", self.dump());
+    }
+
+    fn dump(&self) {
+        let mut index = 0;
+        for list in self.lists.iter() {
+            debug!("dumping display list {:d}:", index);
+            list.dump();
+            index = index + 1;
+        }
+    }
 }
 
 /// A list of rendering operations to be performed.
@@ -105,7 +121,6 @@ impl<E> DisplayList<E> {
             item.draw_into_context(render_context)
         }
         debug!("Ending display list.");
-        debug!("{:?}", self.dump());
     }
 
     /// Returns a preorder iterator over the given display list.

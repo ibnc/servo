@@ -727,16 +727,23 @@ impl<'a> MutableFlowUtils for &'a mut Flow {
         // to an existing second display list.
         // i.e. Need to keep track of changing indexies.
         match self.class() {
-            BlockFlowClass => self.as_block().build_display_list_block(builder, dirty, index, lists),
-            InlineFlowClass => self.as_inline().build_display_list_inline(builder, dirty, index, lists),
+            BlockFlowClass => {
+                if self.as_block().is_fixed {
+                    debug!("hey, I'm fixed :)");
+                    lists.with_mut(|lists| {
+                        lists.append_list(DisplayList::<E>::new());
+                    });
+                    index = index + 1;
+                }
+                self.as_block().build_display_list_block(builder, dirty, index, lists)
+            }
+            InlineFlowClass => { self.as_inline().build_display_list_inline(builder, dirty, index, lists) }
         };
 
         if lists.with_mut(|lists| lists.lists[0].list.len() == 0) {
             return true;
         }
 
-        //TODO(ibnc) find a way around this :/
-        // ahhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
         let mut child_lists = DisplayLists::new();
         child_lists.append_list(DisplayList::new());
         let mut child_lists = RefCell::new(child_lists);
