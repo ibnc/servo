@@ -11,7 +11,6 @@ use layout::flow::{BaseFlow, BlockFlowClass, FlowClass, Flow, ImmutableFlowUtils
 use layout::flow;
 use layout::model::{MaybeAuto, Specified, Auto, specified_or_none, specified};
 use layout::float_context::{FloatContext, PlacementInfo, Invalid, FloatType};
-use layout::util::OpaqueNode;
 
 use std::cell::RefCell;
 use geom::{Point2D, Rect, SideOffsets2D};
@@ -499,15 +498,22 @@ impl BlockFlow {
                                     dirty: &Rect<Au>,
                                     mut index: uint,
                                     lists: &RefCell<DisplayLists<E>>)
-                                    -> bool {
+                                    -> uint {
         if self.is_float() {
-            let list = self.build_display_list_float(builder, dirty, index, lists);
-            return false;
+            self.build_display_list_float(builder, dirty, index, lists);
+            return index;
+        }
+
+        if self.is_fixed {
+            lists.with_mut(|lists| {
+                index = lists.lists.len();
+                lists.add_list(DisplayList::<E>::new());
+            });
         }
 
         let abs_rect = Rect(self.base.abs_position, self.base.position.size);
         if !abs_rect.intersects(dirty) {
-            return true;
+            return index;
         }
 
         debug!("build_display_list_block: adding display element");
@@ -525,15 +531,15 @@ impl BlockFlow {
             child_base.abs_position = this_position + child_base.position.origin;
         }
 
-        false
+        index
     }
 
     pub fn build_display_list_float<E:ExtraDisplayListData>(
                                     &mut self,
                                     builder: &DisplayListBuilder,
                                     dirty: &Rect<Au>,
-                                    mut index: uint,
-                                    mut lists: &RefCell<DisplayLists<E>>)
+                                    index: uint,
+                                    lists: &RefCell<DisplayLists<E>>)
                                     -> bool {
         let abs_rect = Rect(self.base.abs_position, self.base.position.size);
         if !abs_rect.intersects(dirty) {

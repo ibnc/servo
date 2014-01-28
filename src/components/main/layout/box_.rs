@@ -9,7 +9,7 @@ use extra::arc::{MutexArc, Arc};
 use geom::{Point2D, Rect, Size2D, SideOffsets2D};
 use gfx::color::rgb;
 use gfx::display_list::{BaseDisplayItem, BorderDisplayItem, BorderDisplayItemClass};
-use gfx::display_list::{DisplayList, ImageDisplayItem, ImageDisplayItemClass};
+use gfx::display_list::{ImageDisplayItem, ImageDisplayItemClass};
 use gfx::display_list::{SolidColorDisplayItem, SolidColorDisplayItemClass, TextDisplayItem};
 use gfx::display_list::{TextDisplayItemClass, TextDisplayItemFlags, ClipDisplayItem};
 use gfx::display_list::{ClipDisplayItemClass, DisplayLists};

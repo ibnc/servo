@@ -42,7 +42,7 @@ impl<E> DisplayLists<E> {
         ParentDisplayListIterator(self.lists.iter())
     }
 
-    pub fn append_list(&mut self, list: DisplayList<E>) {
+    pub fn add_list(&mut self, list: DisplayList<E>) {
         self.lists.push(list);
     }
 

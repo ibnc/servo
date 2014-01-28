@@ -558,13 +558,13 @@ impl LayoutTask {
             profile(time::LayoutDispListBuildCategory, self.profiler_chan.clone(), || {
                 let root_size = flow::base(layout_root).position.size;
                 let mut display_lists = DisplayLists::new();
-                display_lists.append_list(DisplayList::<OpaqueNode>::new());
+                display_lists.add_list(DisplayList::<OpaqueNode>::new());
                 let display_lists = ~RefCell::new(display_lists);
                 let dirty = flow::base(layout_root).position.clone();
                 let display_list_builder = DisplayListBuilder {
                     ctx: &layout_ctx,
                 };
-                layout_root.build_display_lists(&display_list_builder, &dirty, display_lists);
+                layout_root.build_display_lists(&display_list_builder, &dirty, 0u, display_lists);
 
                 let display_lists = Arc::new(display_lists.unwrap());
 
